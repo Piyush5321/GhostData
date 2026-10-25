@@ -1,4 +1,4 @@
-# Usage Report - Ghost Data Still Exists
+# Usage Report — Ghost Data Still Exists
 
 ## Final full-dataset run
 
@@ -11,7 +11,7 @@ python code/main.py
 - Runtime: Python 3.12.11 (standard library only), with poppler `pdftotext` available on `PATH` for PDF evidence
 - Requests processed: 518
 - Output: COMPLETE 68, INCOMPLETE 441, NOT_APPLICABLE 9
-- Wall-clock time: 7.0 s for the full run
+- Wall-clock time: 7.5 s for the full run
 - Deterministic: repeated runs produce a byte-identical `output.csv` (MD5 `d3b4f270642d182cd5e73ac96ebb4a8b`)
 
 ## Model usage

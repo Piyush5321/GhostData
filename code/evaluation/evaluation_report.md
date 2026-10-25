@@ -1,10 +1,10 @@
-# Evaluation Report - Ghost Data Still Exists
+# Evaluation Report — Ghost Data Still Exists
 
-The agent is a deterministic, rule-based Python program (`code/main.py`). It makes no model or API calls. Every number below comes from running the current code against the participant-visible files only.
+The agent is a deterministic, rule-based Python program (`code/main.py`, package `code/ghostaudit/`). It makes no model or API calls. Every number below was produced by `python code/evaluate.py` on the final code, using participant-visible files only.
 
 ## How accuracy was measured
 
-The only labelled data is `dataset/sample_deletion_requests.csv` (32 cases) with `dataset/sample_output.csv`. Each sample case is run through `audit_case()` in memory and compared with the published answer.
+The only labelled data is `dataset/sample_deletion_requests.csv` (32 cases) with `dataset/sample_output.csv`. `code/evaluate.py` runs each sample case through `audit_case()` and compares the result with the published answer (`ghostaudit.validation.score_against_gold`).
 
 - **Status accuracy**: share of cases whose `deletion_status` matches.
 - **Step-level accuracy**: precision and recall of steps, where a step matches when `phase`, `system_id`, `resource_id`, `operation`, `state` and `evidence_id` are all equal.
@@ -42,20 +42,22 @@ All remaining differences are in VERIFICATION. They concern resources that no ad
 
 ## Additional evaluation cases (created by the team)
 
-These are regression tests in `code/test_evidence_state.py`, `code/test_log_matching.py` and `code/test_fixes.py`. Each one reproduces a failure found in the real data. All pass.
+The suite in `tests/` (37 tests, `python -m unittest -v`) contains these cases. Each one reproduces a situation found in the real data. All pass.
 
-| # | Case | Input | Expected | Result |
+| # | Case | Input | Expected | Test |
 | --- | --- | --- | --- | --- |
-| 1 | NOT_FOUND lookup (evidence_13, case_133) | JSON record `result: "NOT_FOUND"`, `record_type: USER_PROFILE` | account absent → VERIFY_RECORD_ABSENT, no finding | pass |
-| 2 | Cache miss inside a trace | trace with `cache_lookup result=miss` followed by `rows=1` PII scan | record present (a cache miss is not absence) | pass |
-| 3 | Replica drift (case_05 shape) | replica row present on 09-02, primary readback 404 on 09-05 | REPORT_REMAINING_RECORD from the replica snapshot | pass |
-| 4 | Historical email (case_12 shape) | request from an address found only in `user_audit_log.old_value` | resolves to the stable user and both emails | pass |
-| 5 | Record dated after audit_at (case_135) | admissible file containing a record with `recorded_at` after `audit_at` | that record is ignored | pass |
-| 6 | Scoped snapshot (evidence_90) | SQL file with `snapshot_scope = account_service` and empty tables for other systems | coverage only for `account_service` | pass |
-| 7 | Prefix collision (case_34) | subject `user_11`, log line about `user_110` | no match | pass |
-| 8 | Four log layouts | `requestId/message=`, JSON-lines, pipe, RFC 5424 syslog | lookup line joined to its resource line by trace | pass |
-| 9 | Multilingual / negated requests | Spanish, Portuguese, French, Japanese, Korean requests; "not a request to erase it" | deletion vs NOT_APPLICABLE | pass |
-| 10 | Catalog label in a document (evidence_18, case_33) | statement PDF printing `NST-2026-0718-1842`; catalog links that label to `export_1842` | document resolved to `export_1842` | pass |
+| 1 | NOT_FOUND lookup (evidence_13, case_133) | JSON record `result: "NOT_FOUND"`, `record_type: USER_PROFILE` | absent, category USER_PROFILE | `test_state.PresenceTest.test_lookup_results_in_json` |
+| 2 | Cache miss inside a trace | `cache_lookup result=miss` followed by a `rows=1` PII scan | present (a cache miss is not absence) | `test_state.PresenceTest.test_cache_miss_does_not_mean_absent` |
+| 3 | Replica drift (case_05) | replica row present on 09-02, primary readback 404 on 09-05 | replica observation decides: remaining | `test_audit.LatestObservationTest.test_replica_copy_survives_later_primary_readback` |
+| 4 | Historical email (case_12) | request from an address found only in `user_audit_log.old_value` | resolves to the stable user and all identifiers | `test_identity.IdentityResolutionTest.test_historical_email_resolves_to_stable_user` |
+| 5 | Record dated after audit_at (case_135) | admissible file listing a record with `recorded_at` after `audit_at` | record ignored | `test_audit.AdmissibilityTest.test_record_observed_after_audit_at_is_excluded` |
+| 6 | Scoped snapshot (evidence_90) | `snapshot_scope = account_service`; empty tables for other systems | coverage only for `account_service` | `test_evidence.SqlSnapshotTest.test_snapshot_scope_limits_coverage` |
+| 7 | Prefix collision (case_34) | subject `user_11`, log line about `user_110` | no match | `test_identity.IdentifierMatchingTest.test_whole_token_matching` |
+| 8 | Six log layouts | key=value, bracket, `requestId/message=`, JSON-lines, pipe, RFC 5424 syslog | lookup line joined to its resource line by trace | `test_evidence.LogParsingTest` |
+| 9 | Multilingual and negated requests | Spanish, Portuguese, French, Japanese, Korean; "not a request to erase it" | deletion vs NOT_APPLICABLE | `test_classifier.ClassifierTest` |
+| 10 | Catalog label in a document (evidence_18, case_33) | statement PDF printing `NST-2026-0718-1842` | resolved to `export_1842` | `test_evidence.CatalogLabelTest` |
+| 11 | Retained audit record only | only a security audit record matches the subject | INCOMPLETE, not COMPLETE | `test_audit.AuditCaseTest.test_retained_audit_record_alone_is_not_complete` |
+| 12 | Output contract | the generated `output.csv` | 518 rows, 0 contract violations | `test_output.OutputContractTest` |
 
 ## Failures found and improvements made
 
@@ -74,12 +76,13 @@ These are regression tests in `code/test_evidence_state.py`, `code/test_log_matc
 | Snapshot coverage ignored `snapshot_scope` | potential false absence | coverage limited to declared scope; JSON extracts never prove absence |
 | Records with their own timestamp after `audit_at` used | case_135 and case_383 judged on later evidence | per-record `recorded_at`/`observed_at` filter |
 | Documents that print a business label instead of a resource id skipped | case_33 had no steps although an admissible statement PDF names the subject | PDF resource resolved through `LINK_RESOURCE_IDENTITY` labels |
+| One 1,100-line script and print-only test scripts that could not fail | hard to review; regressions could pass unnoticed | split into the `ghostaudit` package; `unittest` suite with assertions; `evaluate.py` exits non-zero on contract violations (output verified byte-identical before and after) |
 
 Sample status accuracy moved from 17/32 (initial checkpoint) to 22, 25, 27/32 across these fixes. Findings precision and recall are 1.000.
 
 ## Output validation (518 evaluation cases)
 
-Checked with a contract validator after the final run:
+Checked by `ghostaudit.validation.validate_output` (run by `code/evaluate.py` and `tests/test_output.py`) after the final run:
 
 - 518 rows, header `case_id,deletion_status,steps_json`, unique IDs sorted by `case_id`.
 - Every step has exactly the 7 required fields, a valid operation/state pair, consecutive numbering and FINDING → REMEDIATION → VERIFICATION order.
@@ -107,9 +110,7 @@ INCOMPLETE breakdown: 354 with findings; 78 with only a retained security-audit 
 ## How to reproduce
 
 ```bash
-python code/main.py
-python code/test_evidence_state.py
-python code/test_log_matching.py
-python code/test_audit.py
-python code/test_fixes.py
+python code/main.py        # regenerate output.csv
+python code/evaluate.py    # sample metrics above + contract validation
+python -m unittest -v      # 37 tests, including the custom cases above
 ```

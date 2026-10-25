@@ -1,67 +1,92 @@
-# Ghost Data Still Exists - Deletion Audit Agent
+# Ghost Data Still Exists — Deletion Audit Agent
 
-A deterministic deletion-audit agent for the HackerRank Orchestrate October 2026 challenge. For each deletion request it resolves the person's current and historical identifiers and reconstructs the state of every linked record at the case's `audit_at`, using the supplied evidence. It then decides whether the deletion is `COMPLETE`, `INCOMPLETE` or `NOT_APPLICABLE`. It outputs the findings, the ordered remediation plan and the verification checks.
+A deterministic agent that audits personal-data deletion requests for the HackerRank Orchestrate (October 2026) challenge. For every request it:
 
-The agent is rule-based Python: it makes no language-model or API calls at run time. AI coding assistants were used to build it (see `log.txt`).
+1. decides whether the request actually authorizes deletion;
+2. resolves the person's current and historical identifiers;
+3. reconstructs, at the case's `audit_at`, the state of every record linked to that person across databases, replicas, logs, exports, backups and documents;
+4. applies `deletion_rules.csv` and reports `COMPLETE`, `INCOMPLETE` or `NOT_APPLICABLE` with evidence-backed findings, an ordered remediation plan and verification checks.
 
-## Setup
-
-- Python 3.8+ (developed and run on 3.12), standard library only
-- Optional: poppler's `pdftotext` on `PATH` to read PDF evidence. Without it, PDFs are skipped and two evidence files (evidence_55, evidence_58) are not used.
-- Place the challenge `dataset/` folder at the repository root (it is not included in this repository).
-
-## Run
-
-From the repository root:
-
-```bash
-python code/main.py
-```
-
-This reads `dataset/` and writes `output.csv` (518 rows) to the repository root in about 7 seconds.
-
-## Tests
-
-```bash
-python code/test_evidence_state.py   # evidence parsing, state and time-filter regressions
-python code/test_log_matching.py     # identifier matching regressions
-python code/test_audit.py            # core helpers
-python code/test_fixes.py            # classifier and presence edge cases (prints OK/FAIL per case)
-```
-
-## How it works
-
-All logic is in `code/main.py`. `ARCHITECTURE.md` describes it in detail.
-
-1. **Request classification** (`is_deletion_request`): multilingual keyword stems with verb-specific negations. Non-deletion requests become `NOT_APPLICABLE` with `[]`.
-2. **Identity resolution** (`build_identity_index`, `resolve_subject`): current email, phone and email hash, plus historical values from `user_audit_log.csv` (`old_value`/`new_value`).
-3. **Evidence parsing** (`load_all_evidence`): SQL snapshots (in-memory SQLite, including JSON payload columns and `snapshot_scope`); JSON exports; six log layouts grouped by trace and split per resource; the handover text table; and PDFs. Each record gets a canonical `system_id` from its resource prefix and a store (primary or a named replica).
-4. **Matching** (`find_relevant_records`): whole-token identifier matching and explicit `LINK_RESOURCE_IDENTITY` catalog links. Evidence captured after `audit_at`, and records whose own `recorded_at`/`observed_at` is later, are excluded.
-5. **State** (`latest_observations`): the latest observation per store. A copy still held by any store counts as remaining. Omission from a later SQL snapshot that covers the store proves absence, but is never used to declare a retained audit record missing.
-6. **Policy and steps** (`audit_case`, `build_steps`): `deletion_rules.csv` actions produce the finding, remediation and verification patterns, ordered by phase, operation, `system_id` and `resource_id`.
-
-A case is `COMPLETE` only when no finding exists and at least one copy outside the retained security audit log is verified. Otherwise it is `INCOMPLETE`. Findings and COMPLETE verifications cite evidence; proposed remediation and future checks use an empty `evidence_id`.
+The agent is rule-based Python and makes **no language-model or network calls** at run time, so results are reproducible and cost nothing to run. AI coding assistants were used during development; see `log.txt`.
 
 ## Results
 
-Status counts for the 518 cases: COMPLETE 68, INCOMPLETE 441, NOT_APPLICABLE 9. On the 32 public samples: status 27/32, findings precision and recall 1.000, exact step sequences 8/32. Full metrics, custom evaluation cases and the change history are in `code/evaluation/evaluation_report.md`; run statistics are in `code/evaluation/usage_report.md`.
+| | |
+| --- | --- |
+| Evaluation requests | 518 (COMPLETE 68, INCOMPLETE 441, NOT_APPLICABLE 9) |
+| Output contract violations | 0 |
+| Public samples — status accuracy | 27 / 32 (0.844) |
+| Public samples — findings and remediation | precision 1.000, recall 1.000 |
+| Public samples — all steps | precision 0.981, recall 0.808 |
+| Full run time | ~7 s |
 
-## Known limitations
+Details: [`code/evaluation/evaluation_report.md`](code/evaluation/evaluation_report.md) and [`code/evaluation/usage_report.md`](code/evaluation/usage_report.md).
 
-- PNG screenshots are not read (no OCR).
-- Records linked to a person only by the timing of `system_activity` events are not used, because that linkage is ambiguous in the data.
-- 9 INCOMPLETE cases have no steps and 78 contain only a retained audit-record verification, because no other admissible, machine-readable evidence exists for them. No finding is invented to fill these.
+## Quick start
+
+Requirements: Python 3.8+ (standard library only). Optional: poppler's `pdftotext` on `PATH` to read PDF evidence. Without it, PDFs are skipped and two evidence files are not used.
+
+Place the challenge `dataset/` folder at the repository root, then:
+
+```bash
+python code/main.py        # writes output.csv (518 rows)
+python code/evaluate.py    # sample metrics + output contract check
+python -m unittest -v      # 37 unit and regression tests
+```
+
+`main.py` accepts `--dataset DIR` and `--output FILE` to use other locations.
+
+## Output
+
+`output.csv` has the columns `case_id,deletion_status,steps_json`, sorted by `case_id`. Each step is:
+
+```json
+{"step_no": 1, "phase": "FINDING", "system_id": "account_service", "resource_id": "account_005",
+ "operation": "REPORT_REMAINING_RECORD", "state": "PRESENT", "evidence_id": "evidence_54"}
+```
+
+- **COMPLETE** — verification steps only, each citing the evidence that proves the state.
+- **INCOMPLETE** — findings citing evidence, then remediation and verification steps with an empty `evidence_id` (future work).
+- **NOT_APPLICABLE** — `[]`.
+
+Steps are ordered by phase, then by the operation order in the problem statement, then by `system_id` and `resource_id`.
+
+## How it works
+
+```text
+deletion_requests.csv ─► classifier ─► identity ─► evidence selection ─► state at audit_at ─► policy ─► steps
+                                                     ▲
+              evidence_files.csv + dataset/evidence/ ┘ (SQL, JSON, 6 log layouts, handover text, PDF)
+```
+
+- **Request classification**: multilingual deletion stems with verb-specific negations.
+- **Identity**: current email, phone and email hash, plus historical values from `user_audit_log.csv`. Matching is whole-token, so `user_11` never matches `user_110`.
+- **Evidence**: every format is normalized into records with a canonical `system_id`, a store (primary or a named replica) and the manifest capture time. Log lines are grouped by trace.
+- **State at `audit_at`**: only evidence captured, and observed, at or before `audit_at` is used. Each store's latest observation decides. Any store still holding a copy means the record remains. Absence from a later SQL snapshot that covers the store proves deletion.
+- **Policy**: data flows, restore risks, retained audit records, tombstones, and delete / redact / anonymize rules.
+- **Status**: COMPLETE only when nothing remains and evidence covers at least one copy beyond the retained audit log.
+
+[`ARCHITECTURE.md`](ARCHITECTURE.md) documents each module and decision rule.
 
 ## Repository layout
 
-| Path | Purpose |
-| --- | --- |
-| `code/main.py` | the agent (entry point) |
-| `code/test_*.py` | regression and unit tests |
-| `code/evaluation/` | `evaluation_report.md`, `usage_report.md` (packaged as `evaluation/` at the root of `code.zip`) |
-| `output.csv` | submitted predictions |
-| `log.txt` | AI-assistant development log (append-only) |
-| `ARCHITECTURE.md` | design and data flow |
-| `AGENTS.md`, `problem_statement.md` | challenge instructions |
+```text
+code/
+  main.py               entry point: python code/main.py
+  evaluate.py           sample scoring and contract validation
+  ghostaudit/           the agent (classifier, identity, evidence, state, policy, audit, validation)
+  evaluation/           evaluation_report.md, usage_report.md
+tests/                  unittest suite
+output.csv              predictions for the 518 evaluation requests
+log.txt                 AI-assistant development log (append-only)
+ARCHITECTURE.md         design and data flow
+AGENTS.md, problem_statement.md, agent_trace_instructions.md   challenge instructions
+```
 
-Challenge page: https://www.hackerrank.com/contests/hackerrank-orchestrate-october26/challenges/ghost-data-still-exists
+`dataset/` is the challenge input and is not redistributed.
+
+## Known limitations
+
+- PNG screenshots are not read: no OCR engine is bundled, and Windows OCR flattens their table layouts.
+- Resources linked to a person only by the timing of `system_activity` events are not used, because that linkage is ambiguous in the data.
+- 9 INCOMPLETE cases have no steps and 78 contain only a retained audit-record verification, because no other admissible, machine-readable evidence exists for them. No finding is invented to fill these.
