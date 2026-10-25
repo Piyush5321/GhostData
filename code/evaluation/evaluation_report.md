@@ -43,7 +43,7 @@ All remaining differences are verification steps:
 
 ## Additional evaluation cases (created by the team)
 
-The suite in `tests/` (43 tests, `python -m unittest -v`) contains these cases. Each one reproduces a situation found in the real data. All pass.
+The suite in `code/tests/` (43 tests) contains these cases. Each one reproduces a situation found in the real data. All pass.
 
 | # | Case | Input | Expected | Test |
 | --- | --- | --- | --- | --- |
@@ -88,7 +88,7 @@ Sample status accuracy moved from 17/32 (initial checkpoint) to 22, 25, 27, 29 a
 
 ## Output validation (518 evaluation cases)
 
-Checked by `ghostaudit.validation.validate_output` (run by `code/evaluate.py` and `tests/test_output.py`) after the final run:
+Checked by `ghostaudit.validation.validate_output` (run by `code/evaluate.py` and `code/tests/test_output.py`) after the final run:
 
 - 518 rows, header `case_id,deletion_status,steps_json`, unique IDs sorted by `case_id`.
 - Every step has exactly the 7 required fields, a valid operation/state pair, consecutive numbering and FINDING → REMEDIATION → VERIFICATION order.
@@ -118,5 +118,5 @@ INCOMPLETE breakdown: 354 with findings and 9 with no steps.
 ```bash
 python code/main.py        # regenerate output.csv
 python code/evaluate.py    # sample metrics above + contract validation
-python -m unittest -v      # 43 tests, including the custom cases above
+python -m unittest discover -s code -t code -v   # 43 tests, including the custom cases above
 ```

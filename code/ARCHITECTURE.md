@@ -109,7 +109,7 @@ Steps are ordered by phase, by the operation order in the problem statement, the
 
 ## Quality gates
 
-- `python -m unittest` runs 43 tests: classifier, identity, every evidence format, state rules, step ordering, end-to-end case decisions, and the output contract.
+- `python -m unittest discover -s code -t code` (or `python -m unittest` inside `code/`) runs 43 tests: classifier, identity, every evidence format, state rules, step ordering, end-to-end case decisions, and the output contract.
 - `python code/evaluate.py` scores the 32 public samples and validates `output.csv`. It exits non-zero on any contract violation.
 - The run is deterministic: repeated runs produce a byte-identical `output.csv`.
 
