@@ -332,11 +332,25 @@ RESOURCE_ID_PATTERN = re.compile(
 )
 
 
-def parse_pdf_file(path, file_id, captured_at):
+def catalog_labels(system_activity):
+    """Map business labels to resource ids from data-catalog links, e.g.
+    'linked export_1842 (NST-2026-0718-1842) to ...' -> {'NST-2026-0718-1842': 'export_1842'}."""
+    labels = {}
+    for row in system_activity:
+        if row.get("event_type") != "LINK_RESOURCE_IDENTITY":
+            continue
+        m = re.search(r"(?:linked|confirmed) (\S+) \(([^)]+)\)", row.get("details", ""))
+        if m and m.group(2) != m.group(1) and not m.group(2).startswith("user_"):
+            labels[m.group(2)] = m.group(1)
+    return labels
+
+
+def parse_pdf_file(path, file_id, captured_at, labels=None):
     """Extract PDF text with poppler's pdftotext when it is installed (optional).
 
-    A document becomes evidence only when it names exactly one resource, so a
-    multi-subject register cannot link unrelated people to a resource.
+    A document becomes evidence only when it names exactly one resource, either by
+    its id or by a catalog label (see catalog_labels), so a multi-subject register
+    cannot link unrelated people to a resource.
     """
     exe = shutil.which("pdftotext")
     if not exe:
@@ -347,6 +361,8 @@ def parse_pdf_file(path, file_id, captured_at):
         return []
     text = result.stdout.decode("utf-8", errors="replace")
     resource_ids = set(RESOURCE_ID_PATTERN.findall(text))
+    if not resource_ids and labels:
+        resource_ids = {rid for label, rid in labels.items() if label in text}
     if len(resource_ids) != 1:
         return []
     return [{
@@ -359,7 +375,7 @@ def parse_pdf_file(path, file_id, captured_at):
     }]
 
 
-def parse_evidence_file(file_id, rel_path, captured_at):
+def parse_evidence_file(file_id, rel_path, captured_at, labels=None):
     ext = os.path.splitext(rel_path)[1].lower()
     # Remove leading "evidence/" if present, since EVIDENCE_DIR already points to the evidence directory
     if rel_path.startswith("evidence/"):
@@ -374,7 +390,7 @@ def parse_evidence_file(file_id, rel_path, captured_at):
     if ext == ".txt":
         return parse_text_file(path, file_id, captured_at)
     if ext == ".pdf":
-        return parse_pdf_file(path, file_id, captured_at)
+        return parse_pdf_file(path, file_id, captured_at, labels)
     if ext == ".log":
         return parse_log_file(path, file_id, captured_at)
     return []
@@ -404,13 +420,14 @@ def canonical_system(resource_id, fallback):
     return fallback
 
 
-def load_all_evidence(evidence_manifest):
+def load_all_evidence(evidence_manifest, system_activity=()):
+    labels = catalog_labels(system_activity)
     all_records = []
     for row in evidence_manifest:
         file_id = row["file_id"].strip()
         rel_path = row["file_path"].strip()
         captured_at = parse_ts(row.get("captured_at", ""))
-        for rec in parse_evidence_file(file_id, rel_path, captured_at):
+        for rec in parse_evidence_file(file_id, rel_path, captured_at, labels):
             if rec.get("kind") != "coverage":
                 # Logs name the reading service (e.g. support_replica); keep it as the store
                 rec.setdefault("store", store_of(rec["system"]))
@@ -1102,7 +1119,7 @@ def main():
     system_activity = load_csv("system_activity.csv")
 
     id_to_user, user_ids = build_identity_index(identities, audit_log)
-    evidence_records = load_all_evidence(evidence_manifest)
+    evidence_records = load_all_evidence(evidence_manifest, system_activity)
 
     out_rows = []
     for case in requests:

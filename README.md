@@ -50,7 +50,7 @@ Status counts for the 518 cases: COMPLETE 68, INCOMPLETE 441, NOT_APPLICABLE 9. 
 
 - PNG screenshots are not read (no OCR).
 - Records linked to a person only by the timing of `system_activity` events are not used, because that linkage is ambiguous in the data.
-- 10 INCOMPLETE cases have no steps and 78 contain only a retained audit-record verification, because no other admissible evidence exists for them. No finding is invented to fill these.
+- 9 INCOMPLETE cases have no steps and 78 contain only a retained audit-record verification, because no other admissible, machine-readable evidence exists for them. No finding is invented to fill these.
 
 ## Repository layout
 

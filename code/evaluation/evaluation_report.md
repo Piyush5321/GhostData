@@ -55,6 +55,7 @@ These are regression tests in `code/test_evidence_state.py`, `code/test_log_matc
 | 7 | Prefix collision (case_34) | subject `user_11`, log line about `user_110` | no match | pass |
 | 8 | Four log layouts | `requestId/message=`, JSON-lines, pipe, RFC 5424 syslog | lookup line joined to its resource line by trace | pass |
 | 9 | Multilingual / negated requests | Spanish, Portuguese, French, Japanese, Korean requests; "not a request to erase it" | deletion vs NOT_APPLICABLE | pass |
+| 10 | Catalog label in a document (evidence_18, case_33) | statement PDF printing `NST-2026-0718-1842`; catalog links that label to `export_1842` | document resolved to `export_1842` | pass |
 
 ## Failures found and improvements made
 
@@ -72,6 +73,7 @@ These are regression tests in `code/test_evidence_state.py`, `code/test_log_matc
 | First record kept instead of latest; replicas ignored | stale or hidden copies | latest observation per store; any store still holding a copy wins |
 | Snapshot coverage ignored `snapshot_scope` | potential false absence | coverage limited to declared scope; JSON extracts never prove absence |
 | Records with their own timestamp after `audit_at` used | case_135 and case_383 judged on later evidence | per-record `recorded_at`/`observed_at` filter |
+| Documents that print a business label instead of a resource id skipped | case_33 had no steps although an admissible statement PDF names the subject | PDF resource resolved through `LINK_RESOURCE_IDENTITY` labels |
 
 Sample status accuracy moved from 17/32 (initial checkpoint) to 22, 25, 27/32 across these fixes. Findings precision and recall are 1.000.
 
@@ -82,7 +84,7 @@ Checked with a contract validator after the final run:
 - 518 rows, header `case_id,deletion_status,steps_json`, unique IDs sorted by `case_id`.
 - Every step has exactly the 7 required fields, a valid operation/state pair, consecutive numbering and FINDING → REMEDIATION → VERIFICATION order.
 - Findings and COMPLETE verifications all cite evidence; remediation and INCOMPLETE verification steps use an empty `evidence_id`.
-- No cited evidence is captured after the case's `audit_at`; all 916 citations name a file that contains the cited resource (2 by omission from a covering SQL snapshot).
+- No cited evidence is captured after the case's `audit_at`; all 919 citations name a file that contains the cited resource (2 by omission from a covering SQL snapshot).
 - Validator errors: 0.
 
 | Status | Count |
@@ -91,7 +93,10 @@ Checked with a contract validator after the final run:
 | INCOMPLETE | 441 |
 | NOT_APPLICABLE | 9 |
 
-INCOMPLETE breakdown: 353 with findings; 78 with only a retained security-audit verification; 10 with no steps. For the 10 empty cases, the subject's evidence is captured only after `audit_at` (9 cases) or does not exist (case_63). The 78 verification-only cases contain no admissible evidence beyond the retained audit record. These conflict with "INCOMPLETE includes findings". No finding is invented to satisfy that rule.
+INCOMPLETE breakdown: 354 with findings; 78 with only a retained security-audit verification; 9 with no steps. These 87 rows conflict with "INCOMPLETE includes findings", but no finding is invented to satisfy that rule:
+
+- **9 empty cases** (case_35, case_39, case_50, case_52, case_53, case_55, case_61, case_63, case_538). Their admissible evidence is limited to PNG screenshots linked by `LINK_RESOURCE_IDENTITY`, or the subject's records are captured only after `audit_at`. Windows OCR was tested on one screenshot; it flattens the table layout, so record state could not be read reliably and screenshots are not used.
+- **78 verification-only cases** (e.g. case_103, case_107, case_108, case_111, case_126). Every admissible record matched to the subject is in `security_service`. 18 of them have other evidence captured only after `audit_at`, which is excluded.
 
 ## Known limitations
 

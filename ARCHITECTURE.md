@@ -37,7 +37,7 @@ deletion_requests.csv ──► for each case: audit_case
 | `.json` | `parse_json_file` | Recursive walk; every object with a `resource_id` becomes a record. JSON bundles are treated as extracts and never prove absence. |
 | `.log` | `normalize_log_line`, `parse_log_file` | Six layouts: `key=value`; `[LEVEL] [service] [trace]`; JSON-lines; pipe-delimited; RFC 5424 syslog; `requestId=… function=… message="…"`. Lines are grouped by trace and split per resource. Resource-less lines of a trace (e.g. the lookup by email) are shared with each of its resources. |
 | `.txt` | `parse_text_file` | The pipe-delimited handover table (`system | resource | CATEGORY | STATE | identifier`); other text falls back to log parsing. |
-| `.pdf` | `parse_pdf_file` | Uses `pdftotext` if it is on `PATH`. A document is used only when it names exactly one resource. |
+| `.pdf` | `parse_pdf_file` | Uses `pdftotext` if it is on `PATH`. A document is used only when it names exactly one resource, either directly or through a business label that a `LINK_RESOURCE_IDENTITY` event maps to a resource (`catalog_labels`). |
 | `.png` | — | Not parsed (no OCR). |
 
 `canonical_system` maps resource prefixes to the system used in the output (for example `support_` → `support_platform`). The originating table or log service is kept as `store` (`store_of`): names containing "replica" are separate copies; everything else is the primary store.

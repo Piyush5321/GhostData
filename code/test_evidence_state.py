@@ -259,7 +259,24 @@ def test_record_observed_after_audit_at_is_excluded():
     print("✓ a record observed after audit_at is excluded even inside an admissible file")
 
 
+def test_catalog_labels_map_business_labels_to_resources():
+    """evidence_18 shape: the statement PDF prints NST-2026-0718-1842, which the catalog links to export_1842."""
+    from main import catalog_labels
+    activity = [
+        {"event_type": "LINK_RESOURCE_IDENTITY",
+         "details": "Data catalog linked export_1842 (NST-2026-0718-1842) to ingrid.dahl@outlook.com and user_18."},
+        {"event_type": "LINK_RESOURCE_IDENTITY",
+         "details": "Data catalog linked search_428 (search_428) to g.silva76@gmail.com and user_13."},
+        {"event_type": "LINK_RESOURCE_IDENTITY",
+         "details": "Data catalog linked tombstone_17 (user_17) to leonie.g9352@outlook.com and user_17."},
+        {"event_type": "DELETE_RECORD", "details": "Deletion worker submitted export_9 (LABEL-9)."},
+    ]
+    assert catalog_labels(activity) == {"NST-2026-0718-1842": "export_1842"}
+    print("✓ catalog labels resolve documents that print a business label instead of a resource id")
+
+
 if __name__ == "__main__":
+    test_catalog_labels_map_business_labels_to_resources()
     test_record_observed_after_audit_at_is_excluded()
     test_snapshot_scope_limits_coverage()
     test_four_missed_log_layouts_grouped_by_trace()
