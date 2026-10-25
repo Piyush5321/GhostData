@@ -1,0 +1,15 @@
+# Challenge data is not redistributed; place dataset/ at the repository root to run
+dataset/
+
+# Python and local environments
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+
+# Submission archives and agent traces are uploaded separately
+*.zip
+agent-trace/
+submission/
