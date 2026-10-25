@@ -1283,3 +1283,63 @@ branch=kiro-fixes
 repo_root=C:\Users\piyus\Downloads\hackerrank-orchestrate-october26-main
 worktree=main
 parent_agent=none
+
+## 2026-10-25T08:20:00Z Self-assessment of submission quality
+
+User Prompt (verbatim, secrets redacted):
+if you have to mark me how much will you rate me for all 3 submission
+
+Agent Response Summary:
+Gave an estimated score range per scored component (output CSV, code zip, chat transcript) based on verified sample metrics, the contract validation, repository quality and the development log, with the main reasons for lost marks. Estimates only; the hidden canonical answers and judging rubric are not available. No files changed.
+
+Actions:
+* None besides this log entry
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=kiro-fixes
+repo_root=C:\Users\piyus\Downloads\hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## 2026-10-25T08:25:00Z Plan to raise the score
+
+User Prompt (verbatim, secrets redacted):
+well i am not satisfyied with the marks i want more how to get more marks
+
+Agent Response Summary:
+Proposed a prioritized plan with estimated gains: (1) investigate a sample-validated activity-to-resource linkage to recover the account/analytics/audit verifications that drive most remaining output-CSV misses; (2) optional vision-model reading of the PNG screenshots behind an API key, which also makes the agent AI-assisted and gives the usage report real token figures; (3) interview preparation notes. Asked the user which to start. No files changed.
+
+Actions:
+* None besides this log entry
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=kiro-fixes
+repo_root=C:\Users\piyus\Downloads\hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## 2026-10-25T08:50:00Z Constrained workflow linkage validated on samples
+
+User Prompt (verbatim, secrets redacted):
+Start with step 1: investigate activity-based resource linkage, keep it only if it holds up on the public samples, then regenerate, re-score and push.
+
+Agent Response Summary:
+Measured gold sample resources against deletion-worker events: account events fall 1.2 h before to 0.1 h after reported_at with results consistent with reported_status; other actions within about 2 h. Combined timing, status consistency, evidence ownership exclusion and one-resource-per-system uniqueness (propagated to a fixed point over all requests). Validation on the 32 samples: 73 correct links, 0 wrong, stable across three window settings; ambiguous events are left unlinked. Implemented as code/ghostaudit/linkage.py; linked resources take their state from evidence only, and a linked resource with no evidence row is proven absent only by a covering SQL snapshot. Output gained 247 verification steps in 229 rows (no findings added or removed, no status changes).
+
+Actions:
+* Created code/ghostaudit/linkage.py, tests/test_linkage.py (5 tests); edited code/ghostaudit/audit.py, code/main.py, README.md, ARCHITECTURE.md, evaluation/evaluation_report.md, evaluation/usage_report.md
+* python code/main.py: 518 rows, ~11 s, MD5 d7fc6841b54f36b3fd35db276ae12644 (identical on rerun); COMPLETE 146, INCOMPLETE 363, NOT_APPLICABLE 9
+* python code/evaluate.py: status 31/32 (0.969), sequence 16/32, step P/R 0.989/0.902, field 0.835, findings and remediation P/R 1.000; 0 contract violations; 1,082 citations traceable
+* python -m unittest: 43 tests OK
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=kiro-fixes
+repo_root=C:\Users\piyus\Downloads\hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none

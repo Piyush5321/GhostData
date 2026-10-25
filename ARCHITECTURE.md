@@ -30,6 +30,7 @@ deletion_requests.csv ─► audit.audit_case ── for each request ───�
 | `io_utils` | Dataset paths, CSV loading, ISO-8601 parsing |
 | `classifier` | Does the request text authorize deletion? |
 | `identity` | Identity index, subject resolution, whole-token identifier matching |
+| `linkage` | Links deletion-workflow events in `system_activity.csv` to the request they served |
 | `evidence` | Parsers for every evidence format; canonical systems and stores; snapshot coverage |
 | `state` | Presence, explicit lookup results, connector and restore flags, identifier exposure, observation time |
 | `policy` | Data category of a record; the action `deletion_rules.csv` requires |
@@ -62,7 +63,15 @@ SQL snapshots also emit a **coverage** record. It lists the (system, store) pair
 
 ## Decision rules
 
-**Identity.** The request email may be current or historical. `user_audit_log.csv` (`field_name`, `old_value`, `new_value`) supplies former emails, phones and hashes. A record matches when it contains one of these as a whole token, or when its resource was linked to the subject by a `LINK_RESOURCE_IDENTITY` event at or before `audit_at`. No other `system_activity` events are used, because their timing does not identify a single subject.
+**Identity.** The request email may be current or historical. `user_audit_log.csv` (`field_name`, `old_value`, `new_value`) supplies former emails, phones and hashes. A record matches when it contains one of these as a whole token, when its resource was linked to the subject by a `LINK_RESOURCE_IDENTITY` event at or before `audit_at`, or when the workflow linkage assigns the resource to the request.
+
+**Workflow linkage** (`linkage.activity_links`). Deletion-worker events name the resources they acted on but not the person. Over all requests together, an event is a candidate for a request when:
+
+- it falls within the request's window around `reported_at` (account deletions 1.5 h before to 15 min after; other actions 1.5 h before to 2 h after) and not after `audit_at`;
+- for account deletions, its result is consistent with the reported status (COMPLETE → SUCCESS, NOT_STARTED → FAILED, PARTIALLY_COMPLETE → PARTIAL or SUCCESS);
+- no evidence ties the resource to a different person.
+
+Each request takes at most one resource per system and each resource serves one request; a link is assigned only when a single candidate remains, iterated to a fixed point. On the public samples this gives 73 correct and 0 wrong links. Event results are claims, so a linked resource's state is still read from evidence; a linked resource with no evidence row is proven absent only by a covering SQL snapshot.
 
 **Admissibility.** A record is used only if its file was captured at or before `audit_at`, and its own `recorded_at`/`observed_at`, when present, is too.
 
@@ -100,12 +109,12 @@ Steps are ordered by phase, by the operation order in the problem statement, the
 
 ## Quality gates
 
-- `python -m unittest` runs 38 tests: classifier, identity, every evidence format, state rules, step ordering, end-to-end case decisions, and the output contract.
+- `python -m unittest` runs 43 tests: classifier, identity, every evidence format, state rules, step ordering, end-to-end case decisions, and the output contract.
 - `python code/evaluate.py` scores the 32 public samples and validates `output.csv`. It exits non-zero on any contract violation.
 - The run is deterministic: repeated runs produce a byte-identical `output.csv`.
 
 ## Known gaps
 
 - PNG evidence is unread, and PDFs require `pdftotext`.
-- Resources linked to a subject only by `system_activity` timing are not used; several sample verifications depend on such resources.
+- Workflow events that remain ambiguous after the linkage constraints are not used; a few sample verifications (mostly analytics) depend on them.
 - Cases without any admissible evidence linking a record to the subject produce INCOMPLETE rows with no steps, rather than invented findings.

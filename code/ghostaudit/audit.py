@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from .classifier import is_deletion_request
+from .evidence import canonical_system
 from .identity import contains_identifier, record_matches_identifiers, resolve_subject
 from .io_utils import parse_ts
 from .policy import category_for_record, required_action
@@ -43,6 +44,7 @@ class AuditContext:
     rules: dict
     evidence: list
     system_activity: list
+    activity_links: dict = field(default_factory=dict)  # case_id -> resource ids (see linkage.py)
     coverage: list = field(init=False)
 
     def __post_init__(self):
@@ -79,9 +81,10 @@ def _admissible(record, audit_at):
     return True
 
 
-def find_relevant_records(identifiers, audit_at, evidence, system_activity):
-    """Admissible evidence records that carry the subject's identifiers or a catalog-linked resource."""
-    linked = linked_resources(identifiers, audit_at, system_activity)
+def find_relevant_records(identifiers, audit_at, evidence, system_activity, linked=frozenset()):
+    """Admissible evidence records that carry the subject's identifiers or a linked resource
+    (catalog links, plus any resources passed in `linked`)."""
+    linked = linked_resources(identifiers, audit_at, system_activity) | set(linked)
     return [
         rec for rec in evidence
         if rec.get("kind") != "coverage" and _admissible(rec, audit_at)
@@ -117,6 +120,22 @@ def latest_observations(relevant, coverage, audit_at):
         per_store.sort(key=_captured, reverse=True)
         chosen[(system, resource_id)] = _prefer_exposed(per_store)
     return chosen
+
+
+def _absent_linked_resources(resource_ids, observations, coverage, audit_at):
+    """Linked resources with no evidence row of their own: absent when the latest admissible
+    snapshot covering their primary store no longer lists them (e.g. account_001 in a
+    customer_profiles snapshot). Resources without such proof are left out."""
+    observed = {resource_id for _, resource_id in observations}
+    found = {}
+    for resource_id in sorted(set(resource_ids) - observed):
+        system = canonical_system(resource_id, None)
+        if system is None:
+            continue
+        absence = _snapshot_absence(system, "primary", resource_id, _EPOCH, coverage, audit_at)
+        if absence:
+            found[(system, resource_id)] = absence
+    return found
 
 
 def _prefer_exposed(records):
@@ -272,10 +291,14 @@ def audit_case(case, ctx):
 
     audit_at = parse_ts(case.get("audit_at", ""))
     _, identifiers = resolve_subject(case.get("email", ""), ctx.identity_index, ctx.identities, ctx.audit_log)
-    relevant = find_relevant_records(identifiers, audit_at, ctx.evidence, ctx.system_activity)
+    workflow_links = ctx.activity_links.get(case_id, set())
+    relevant = find_relevant_records(identifiers, audit_at, ctx.evidence, ctx.system_activity, workflow_links)
+
+    observations = latest_observations(relevant, ctx.coverage, audit_at)
+    observations.update(_absent_linked_resources(workflow_links, observations, ctx.coverage, audit_at))
 
     plan = StepPlan()
-    for (_, resource_id), record in sorted(latest_observations(relevant, ctx.coverage, audit_at).items()):
+    for (_, resource_id), record in sorted(observations.items()):
         if resource_id.strip():
             plan_resource(plan, record, ctx.rules)
 

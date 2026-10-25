@@ -15,10 +15,11 @@ The agent is rule-based Python and makes **no language-model or network calls** 
 | --- | --- |
 | Evaluation requests | 518 (COMPLETE 146, INCOMPLETE 363, NOT_APPLICABLE 9) |
 | Output contract violations | 0 |
-| Public samples — status accuracy | 29 / 32 (0.906) |
+| Public samples — status accuracy | 31 / 32 (0.969) |
 | Public samples — findings and remediation | precision 1.000, recall 1.000 |
-| Public samples — all steps | precision 0.994, recall 0.819 |
-| Full run time | ~7 s |
+| Public samples — all steps | precision 0.989, recall 0.902 |
+| Public samples — exact step sequence | 16 / 32 |
+| Full run time | ~11 s |
 
 Details: [`evaluation/evaluation_report.md`](evaluation/evaluation_report.md) and [`evaluation/usage_report.md`](evaluation/usage_report.md).
 
@@ -31,7 +32,7 @@ Place the challenge `dataset/` folder at the repository root, then:
 ```bash
 python code/main.py        # writes output.csv (518 rows)
 python code/evaluate.py    # sample metrics + output contract check
-python -m unittest -v      # 38 unit and regression tests
+python -m unittest -v      # 43 unit and regression tests
 ```
 
 `main.py` accepts `--dataset DIR` and `--output FILE` to use other locations.
@@ -61,6 +62,7 @@ deletion_requests.csv ─► classifier ─► identity ─► evidence selectio
 
 - **Request classification**: multilingual deletion stems with verb-specific negations.
 - **Identity**: current email, phone and email hash, plus historical values from `user_audit_log.csv`. Matching is whole-token, so `user_11` never matches `user_110`.
+- **Workflow linkage**: deletion-worker events name resources but not people. An event is linked to a request only when timing, a result consistent with the reported status, evidence ownership and uniqueness leave a single candidate (73 correct, 0 wrong links on the samples). Event results stay claims; state comes from evidence.
 - **Evidence**: every format is normalized into records with a canonical `system_id`, a store (primary or a named replica) and the manifest capture time. Log lines are grouped by trace.
 - **State at `audit_at`**: only evidence captured, and observed, at or before `audit_at` is used. Each store's latest observation decides. Any store still holding a copy means the record remains. Absence from a later SQL snapshot that covers the store proves deletion.
 - **Policy**: data flows, restore risks, retained audit records, tombstones, and delete / redact / anonymize rules.
@@ -74,7 +76,7 @@ deletion_requests.csv ─► classifier ─► identity ─► evidence selectio
 code/
   main.py               entry point: python code/main.py
   evaluate.py           sample scoring and contract validation
-  ghostaudit/           the agent (classifier, identity, evidence, state, policy, audit, validation)
+  ghostaudit/           the agent (classifier, identity, evidence, linkage, state, policy, audit, validation)
 tests/                  unittest suite
 evaluation/             evaluation_report.md, usage_report.md
 output.csv              predictions for the 518 evaluation requests
@@ -88,5 +90,5 @@ AGENTS.md, problem_statement.md, agent_trace_instructions.md   challenge instruc
 ## Known limitations
 
 - PNG screenshots are not read: no OCR engine is bundled, and Windows OCR flattens their table layouts.
-- Resources linked to a person only by the timing of `system_activity` events are not used, because that linkage is ambiguous in the data.
+- Workflow events that stay ambiguous after all linkage constraints (e.g. simultaneous analytics anonymizations for equivalent requests) are not linked.
 - 9 INCOMPLETE cases have no steps, because no admissible, machine-readable evidence links any record to the subject at `audit_at`. No finding is invented to fill these.
