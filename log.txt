@@ -1241,3 +1241,45 @@ branch=kiro-fixes
 repo_root=C:\Users\piyus\Downloads\hackerrank-orchestrate-october26-main
 worktree=main
 parent_agent=none
+
+## 2026-10-25T07:50:00Z Compliance review against the official statement and scoreboard
+
+User Prompt (verbatim, secrets redacted):
+[Pasted the official "Ghost Data Still Exists" problem statement and a leaderboard screenshot (Chat transcript /10, AI judge interview /30, Output CSV /30, Code zip /30); asked whether any change is required.]
+
+Agent Response Summary:
+Compared the statement with the repository: it matches problem_statement.md. Found that every one of the 5 remaining sample status misses (case_01, case_02, case_04, case_21, case_25) is a case where the agent found no violation (empty or retained-audit-only steps) and the published answer is COMPLETE, i.e. 5 of 5 such sample cases are COMPLETE. Identified that code.zip requires evaluation/ at the archive root while the repository keeps it under code/evaluation/. No code changed in this turn; recommendations reported to the user for a decision.
+
+Actions:
+* In-memory audit of the 32 sample cases (no files written)
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=kiro-fixes
+repo_root=C:\Users\piyus\Downloads\hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none
+
+## 2026-10-25T08:10:00Z Apply COMPLETE rule for no-violation cases; move evaluation/ to root
+
+User Prompt (verbatim, secrets redacted):
+Apply both: move evaluation/ to the repository root, and mark cases with no violation found (retained audit record only) as COMPLETE. Re-score, update docs and tests, regenerate output.csv, and push.
+
+Agent Response Summary:
+Changed the status rule in code/ghostaudit/audit.py: a case is COMPLETE when no violation is found and at least one verification is proven by admissible evidence, including when the only linked record is a present, retained audit record; cases with no linked evidence stay INCOMPLETE. Exactly 78 evaluation cases moved INCOMPLETE -> COMPLETE and nothing else changed. Moved code/evaluation/ to evaluation/ at the repository root so a zip of the folder has the required evaluation/ path. Updated the unit test, README, ARCHITECTURE and both reports.
+
+Actions:
+* Edited code/ghostaudit/audit.py, tests/test_audit.py (+1 test), README.md, ARCHITECTURE.md, evaluation/evaluation_report.md, evaluation/usage_report.md
+* Moved code/evaluation/ -> evaluation/
+* python code/main.py: 518 rows, 7.6 s, MD5 43f486cdc5f87c6bb8fbcadf206bf786; COMPLETE 146, INCOMPLETE 363, NOT_APPLICABLE 9
+* python code/evaluate.py: status 29/32 (0.906), step P/R 0.994/0.819, field 0.701, sequence 8/32, findings and remediation P/R 1.000; 0 contract violations; 997 citations traceable
+* python -m unittest: 38 tests OK
+
+Context:
+tool=Claude Code
+model=claude-opus-5-5
+branch=kiro-fixes
+repo_root=C:\Users\piyus\Downloads\hackerrank-orchestrate-october26-main
+worktree=main
+parent_agent=none

@@ -174,9 +174,9 @@ class StepPlan:
     def has_findings(self):
         return bool(self.steps["FINDING"])
 
-    def proves_treatment(self):
-        """Evidence covers at least one copy outside the retained security audit log."""
-        return any(s["system_id"] not in RETAINED_SYSTEMS for s in self.steps["VERIFICATION"])
+    @property
+    def has_verified_state(self):
+        return bool(self.steps["VERIFICATION"])
 
     def ordered(self, future_verifications):
         """Steps ordered by phase, operation, system_id and resource_id, numbered from 1.
@@ -279,9 +279,12 @@ def audit_case(case, ctx):
         if resource_id.strip():
             plan_resource(plan, record, ctx.rules)
 
-    # A retained audit record alone does not show that the subject's data was treated.
-    if not plan.has_findings and plan.proves_treatment():
+    # COMPLETE when admissible evidence shows the subject's records in their required state
+    # and no copy, exposure, data flow or restore path remains. This includes a case whose
+    # only linked record is a retained audit record that is still present (the public
+    # sample answers treat such cases as COMPLETE).
+    if not plan.has_findings and plan.has_verified_state:
         return case_id, "COMPLETE", plan.ordered(future_verifications=False)
-    # Without a finding supported by admissible evidence, steps stay limited to the
-    # verifications that must hold; no finding is invented.
+    # A violation was found, or no admissible evidence links any record to the subject:
+    # INCOMPLETE, with remediation and checks as future work. No finding is invented.
     return case_id, "INCOMPLETE", plan.ordered(future_verifications=True)

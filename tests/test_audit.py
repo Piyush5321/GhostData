@@ -116,10 +116,17 @@ class AuditCaseTest(unittest.TestCase):
             ("REMEDIATION", "DELETE_RECORD", ""),
             ("VERIFICATION", "VERIFY_RECORD_ABSENT", "")])
 
-    def test_retained_audit_record_alone_is_not_complete(self):
+    def test_retained_audit_record_with_no_violation_is_complete(self):
+        """case_21 / case_25 shape: only the retained audit record is linked, nothing remains."""
         evidence = [log("evidence_1", "2026-09-01T00:00:00Z", "audit_record_3",
                         "resource_id=audit_record_3 subject_reference=user_1 rows=1")]
-        self.assertEqual(audit_case(self.case(), self.context(evidence))[1], "INCOMPLETE")
+        _, status, steps = audit_case(self.case(), self.context(evidence))
+        self.assertEqual(status, "COMPLETE")
+        self.assertEqual([(s["operation"], s["evidence_id"]) for s in steps],
+                         [("VERIFY_RECORD_PRESENT", "evidence_1")])
+
+    def test_no_linked_evidence_stays_incomplete(self):
+        self.assertEqual(audit_case(self.case(), self.context([])), ("case_1", "INCOMPLETE", []))
 
     def test_evidence_after_audit_at_is_ignored(self):
         evidence = [log("evidence_9", "2026-09-20T00:00:00Z", "account_9",

@@ -13,14 +13,14 @@ The agent is rule-based Python and makes **no language-model or network calls** 
 
 | | |
 | --- | --- |
-| Evaluation requests | 518 (COMPLETE 68, INCOMPLETE 441, NOT_APPLICABLE 9) |
+| Evaluation requests | 518 (COMPLETE 146, INCOMPLETE 363, NOT_APPLICABLE 9) |
 | Output contract violations | 0 |
-| Public samples — status accuracy | 27 / 32 (0.844) |
+| Public samples — status accuracy | 29 / 32 (0.906) |
 | Public samples — findings and remediation | precision 1.000, recall 1.000 |
-| Public samples — all steps | precision 0.981, recall 0.808 |
+| Public samples — all steps | precision 0.994, recall 0.819 |
 | Full run time | ~7 s |
 
-Details: [`code/evaluation/evaluation_report.md`](code/evaluation/evaluation_report.md) and [`code/evaluation/usage_report.md`](code/evaluation/usage_report.md).
+Details: [`evaluation/evaluation_report.md`](evaluation/evaluation_report.md) and [`evaluation/usage_report.md`](evaluation/usage_report.md).
 
 ## Quick start
 
@@ -31,7 +31,7 @@ Place the challenge `dataset/` folder at the repository root, then:
 ```bash
 python code/main.py        # writes output.csv (518 rows)
 python code/evaluate.py    # sample metrics + output contract check
-python -m unittest -v      # 37 unit and regression tests
+python -m unittest -v      # 38 unit and regression tests
 ```
 
 `main.py` accepts `--dataset DIR` and `--output FILE` to use other locations.
@@ -64,7 +64,7 @@ deletion_requests.csv ─► classifier ─► identity ─► evidence selectio
 - **Evidence**: every format is normalized into records with a canonical `system_id`, a store (primary or a named replica) and the manifest capture time. Log lines are grouped by trace.
 - **State at `audit_at`**: only evidence captured, and observed, at or before `audit_at` is used. Each store's latest observation decides. Any store still holding a copy means the record remains. Absence from a later SQL snapshot that covers the store proves deletion.
 - **Policy**: data flows, restore risks, retained audit records, tombstones, and delete / redact / anonymize rules.
-- **Status**: COMPLETE only when nothing remains and evidence covers at least one copy beyond the retained audit log.
+- **Status**: COMPLETE when admissible evidence verifies the subject's records in their required state and nothing remains, including when the only linked record is a retained audit record; INCOMPLETE when a violation is found or no evidence links any record to the subject.
 
 [`ARCHITECTURE.md`](ARCHITECTURE.md) documents each module and decision rule.
 
@@ -75,8 +75,8 @@ code/
   main.py               entry point: python code/main.py
   evaluate.py           sample scoring and contract validation
   ghostaudit/           the agent (classifier, identity, evidence, state, policy, audit, validation)
-  evaluation/           evaluation_report.md, usage_report.md
 tests/                  unittest suite
+evaluation/             evaluation_report.md, usage_report.md
 output.csv              predictions for the 518 evaluation requests
 log.txt                 AI-assistant development log (append-only)
 ARCHITECTURE.md         design and data flow
@@ -89,4 +89,4 @@ AGENTS.md, problem_statement.md, agent_trace_instructions.md   challenge instruc
 
 - PNG screenshots are not read: no OCR engine is bundled, and Windows OCR flattens their table layouts.
 - Resources linked to a person only by the timing of `system_activity` events are not used, because that linkage is ambiguous in the data.
-- 9 INCOMPLETE cases have no steps and 78 contain only a retained audit-record verification, because no other admissible, machine-readable evidence exists for them. No finding is invented to fill these.
+- 9 INCOMPLETE cases have no steps, because no admissible, machine-readable evidence links any record to the subject at `audit_at`. No finding is invented to fill these.

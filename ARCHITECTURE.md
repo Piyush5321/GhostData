@@ -93,14 +93,14 @@ SQL snapshots also emit a **coverage** record. It lists the (system, store) pair
 | DELETE rule | present | REPORT_REMAINING_RECORD → DELETE_RECORD → VERIFY_RECORD_ABSENT |
 
 **Status.**
-- **COMPLETE** requires no findings and at least one verified copy outside the retained security audit log. Its steps are verification only, each citing evidence.
-- **INCOMPLETE** otherwise. Findings cite evidence; remediation and verification steps use an empty `evidence_id`.
+- **COMPLETE** requires no findings and at least one verification proven by admissible evidence (a retained audit record that is still present counts, as in the public sample answers). Its steps are verification only, each citing evidence.
+- **INCOMPLETE** when a violation is found, or when no admissible evidence links any record to the subject. Findings cite evidence; remediation and verification steps use an empty `evidence_id`.
 
 Steps are ordered by phase, by the operation order in the problem statement, then by `system_id` and `resource_id`, and numbered from 1.
 
 ## Quality gates
 
-- `python -m unittest` runs 37 tests: classifier, identity, every evidence format, state rules, step ordering, end-to-end case decisions, and the output contract.
+- `python -m unittest` runs 38 tests: classifier, identity, every evidence format, state rules, step ordering, end-to-end case decisions, and the output contract.
 - `python code/evaluate.py` scores the 32 public samples and validates `output.csv`. It exits non-zero on any contract violation.
 - The run is deterministic: repeated runs produce a byte-identical `output.csv`.
 
@@ -108,4 +108,4 @@ Steps are ordered by phase, by the operation order in the problem statement, the
 
 - PNG evidence is unread, and PDFs require `pdftotext`.
 - Resources linked to a subject only by `system_activity` timing are not used; several sample verifications depend on such resources.
-- Cases without admissible evidence produce INCOMPLETE rows with empty or verification-only steps, rather than invented findings.
+- Cases without any admissible evidence linking a record to the subject produce INCOMPLETE rows with no steps, rather than invented findings.

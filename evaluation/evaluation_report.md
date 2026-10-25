@@ -17,32 +17,32 @@ There are no labels for the 518 evaluation cases, so their correctness is checke
 
 | Metric | Value |
 | --- | --- |
-| Status accuracy | 27 / 32 (84.4%) |
+| Status accuracy | 29 / 32 (90.6%) |
 | Sequence accuracy (exact ordered steps) | 8 / 32 (25.0%) |
-| Step-level precision / recall | 0.981 / 0.808 |
-| Field-level accuracy (position-aligned) | 0.700 |
+| Step-level precision / recall | 0.994 / 0.819 |
+| Field-level accuracy (position-aligned) | 0.701 |
 
-Status confusion (gold → predicted): COMPLETE → COMPLETE 5, COMPLETE → INCOMPLETE 5, INCOMPLETE → INCOMPLETE 22. No INCOMPLETE case was predicted COMPLETE, and no case was misclassified as NOT_APPLICABLE.
+Status confusion (gold → predicted): COMPLETE → COMPLETE 7, COMPLETE → INCOMPLETE 3, INCOMPLETE → INCOMPLETE 22. No INCOMPLETE case was predicted COMPLETE, and no case was misclassified as NOT_APPLICABLE.
 
 | Phase | True positives | False positives | False negatives | Precision | Recall |
 | --- | --- | --- | --- | --- | --- |
 | FINDING | 41 | 0 | 0 | 1.000 | 1.000 |
 | REMEDIATION | 41 | 0 | 0 | 1.000 | 1.000 |
-| VERIFICATION | 74 | 3 | 37 | 0.961 | 0.667 |
+| VERIFICATION | 76 | 1 | 35 | 0.987 | 0.685 |
 
-Per-field agreement (194 aligned positions): step_no 0.814, phase 0.814, system_id 0.588, resource_id 0.588, operation 0.644, state 0.644, evidence_id 0.804.
+Per-field agreement (194 aligned positions): step_no 0.814, phase 0.814, system_id 0.588, resource_id 0.588, operation 0.644, state 0.644, evidence_id 0.814.
 
 ### Why the remaining samples differ
 
 All remaining differences are in VERIFICATION. They concern resources that no admissible evidence links to the subject:
 
-- The 5 COMPLETE samples predicted INCOMPLETE (case_01, case_02, case_04, case_21, case_25) depend on records such as `account_001` or `account_3136`. In the evidence these appear only as a missing snapshot row or a 404 with a null profile, with no subject identifier. The only connection to the subject is the timing of `system_activity` events. Measured on the data, each authorized case has 4-7 candidate account-deletion events in its window, so this linkage is ambiguous and was deliberately not implemented.
+- The 3 COMPLETE samples predicted INCOMPLETE (case_01, case_02, case_04) have no admissible evidence that names the subject; their answers depend on records such as `account_001` or `account_004`. The COMPLETE samples case_21 and case_25 are predicted correctly but still miss `account_6440` / `account_3136`. In the evidence these appear only as a missing snapshot row or a 404 with a null profile, with no subject identifier. The only connection to the subject is the timing of `system_activity` events. Measured on the data, each authorized case has 4-7 candidate account-deletion events in its window, so this linkage is ambiguous and was deliberately not implemented.
 - Several gold INCOMPLETE verifications cite resources that appear in no evidence file at all (for example `audit_record_5569` for case_20).
-- The 3 extra verification steps are resources genuinely linked to the subject by evidence but not listed in the gold answer (for example `account_6523` for case_17, an earlier lookup by the subject's own email).
+- The 1 extra verification step is a resource genuinely linked to the subject by evidence but not listed in the gold answer (`account_6523` for case_17, an earlier lookup by the subject's own email).
 
 ## Additional evaluation cases (created by the team)
 
-The suite in `tests/` (37 tests, `python -m unittest -v`) contains these cases. Each one reproduces a situation found in the real data. All pass.
+The suite in `tests/` (38 tests, `python -m unittest -v`) contains these cases. Each one reproduces a situation found in the real data. All pass.
 
 | # | Case | Input | Expected | Test |
 | --- | --- | --- | --- | --- |
@@ -56,7 +56,7 @@ The suite in `tests/` (37 tests, `python -m unittest -v`) contains these cases. 
 | 8 | Six log layouts | key=value, bracket, `requestId/message=`, JSON-lines, pipe, RFC 5424 syslog | lookup line joined to its resource line by trace | `test_evidence.LogParsingTest` |
 | 9 | Multilingual and negated requests | Spanish, Portuguese, French, Japanese, Korean; "not a request to erase it" | deletion vs NOT_APPLICABLE | `test_classifier.ClassifierTest` |
 | 10 | Catalog label in a document (evidence_18, case_33) | statement PDF printing `NST-2026-0718-1842` | resolved to `export_1842` | `test_evidence.CatalogLabelTest` |
-| 11 | Retained audit record only | only a security audit record matches the subject | INCOMPLETE, not COMPLETE | `test_audit.AuditCaseTest.test_retained_audit_record_alone_is_not_complete` |
+| 11 | Retained audit record only (case_21, case_25) | only a present security audit record matches the subject; nothing remains | COMPLETE with a cited VERIFY_RECORD_PRESENT | `test_audit.AuditCaseTest.test_retained_audit_record_with_no_violation_is_complete` |
 | 12 | Output contract | the generated `output.csv` | 518 rows, 0 contract violations | `test_output.OutputContractTest` |
 
 ## Failures found and improvements made
@@ -76,9 +76,10 @@ The suite in `tests/` (37 tests, `python -m unittest -v`) contains these cases. 
 | Snapshot coverage ignored `snapshot_scope` | potential false absence | coverage limited to declared scope; JSON extracts never prove absence |
 | Records with their own timestamp after `audit_at` used | case_135 and case_383 judged on later evidence | per-record `recorded_at`/`observed_at` filter |
 | Documents that print a business label instead of a resource id skipped | case_33 had no steps although an admissible statement PDF names the subject | PDF resource resolved through `LINK_RESOURCE_IDENTITY` labels |
+| Cases with no violation but only a retained audit record marked INCOMPLETE | 2 public samples (case_21, case_25) and 78 evaluation cases disagreed with the published COMPLETE pattern | COMPLETE when no violation is found and at least one verification is proven by evidence |
 | One 1,100-line script and print-only test scripts that could not fail | hard to review; regressions could pass unnoticed | split into the `ghostaudit` package; `unittest` suite with assertions; `evaluate.py` exits non-zero on contract violations (output verified byte-identical before and after) |
 
-Sample status accuracy moved from 17/32 (initial checkpoint) to 22, 25, 27/32 across these fixes. Findings precision and recall are 1.000.
+Sample status accuracy moved from 17/32 (initial checkpoint) to 22, 25, 27 and 29/32 across these fixes. Findings precision and recall are 1.000.
 
 ## Output validation (518 evaluation cases)
 
@@ -87,19 +88,19 @@ Checked by `ghostaudit.validation.validate_output` (run by `code/evaluate.py` an
 - 518 rows, header `case_id,deletion_status,steps_json`, unique IDs sorted by `case_id`.
 - Every step has exactly the 7 required fields, a valid operation/state pair, consecutive numbering and FINDING → REMEDIATION → VERIFICATION order.
 - Findings and COMPLETE verifications all cite evidence; remediation and INCOMPLETE verification steps use an empty `evidence_id`.
-- No cited evidence is captured after the case's `audit_at`; all 919 citations name a file that contains the cited resource (2 by omission from a covering SQL snapshot).
+- No cited evidence is captured after the case's `audit_at`; all 997 citations name a file that contains the cited resource (2 by omission from a covering SQL snapshot).
 - Validator errors: 0.
 
 | Status | Count |
 | --- | --- |
-| COMPLETE | 68 |
-| INCOMPLETE | 441 |
+| COMPLETE | 146 |
+| INCOMPLETE | 363 |
 | NOT_APPLICABLE | 9 |
 
-INCOMPLETE breakdown: 354 with findings; 78 with only a retained security-audit verification; 9 with no steps. These 87 rows conflict with "INCOMPLETE includes findings", but no finding is invented to satisfy that rule:
+INCOMPLETE breakdown: 354 with findings and 9 with no steps.
 
-- **9 empty cases** (case_35, case_39, case_50, case_52, case_53, case_55, case_61, case_63, case_538). Their admissible evidence is limited to PNG screenshots linked by `LINK_RESOURCE_IDENTITY`, or the subject's records are captured only after `audit_at`. Windows OCR was tested on one screenshot; it flattens the table layout, so record state could not be read reliably and screenshots are not used.
-- **78 verification-only cases** (e.g. case_103, case_107, case_108, case_111, case_126). Every admissible record matched to the subject is in `security_service`. 18 of them have other evidence captured only after `audit_at`, which is excluded.
+- **9 empty cases** (case_35, case_39, case_50, case_52, case_53, case_55, case_61, case_63, case_538). No admissible, machine-readable evidence links any record to the subject at `audit_at`: their evidence is limited to PNG screenshots linked by `LINK_RESOURCE_IDENTITY`, or the subject's records are captured only after `audit_at`. Windows OCR was tested on one screenshot; it flattens the table layout, so record state could not be read reliably and screenshots are not used. These rows conflict with "INCOMPLETE includes findings", but no finding is invented to satisfy that rule.
+- **78 cases whose only linked record is a present, retained audit record** (e.g. case_103, case_107, case_108, case_111, case_126) are COMPLETE with that verification cited. Every public sample with this pattern (case_21, case_25) is COMPLETE in the published answers.
 
 ## Known limitations
 
@@ -112,5 +113,5 @@ INCOMPLETE breakdown: 354 with findings; 78 with only a retained security-audit 
 ```bash
 python code/main.py        # regenerate output.csv
 python code/evaluate.py    # sample metrics above + contract validation
-python -m unittest -v      # 37 tests, including the custom cases above
+python -m unittest -v      # 38 tests, including the custom cases above
 ```
